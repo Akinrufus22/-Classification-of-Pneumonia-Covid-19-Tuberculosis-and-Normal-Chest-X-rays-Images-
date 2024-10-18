@@ -1,0 +1,1238 @@
+import os
+import glob
+import pandas as pd
+from PIL import Image
+import numpy as np
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt # for visualization
+import random
+from imblearn.over_sampling import SMOTE
+from keras.preprocessing import image
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf # Tensorflow library for deep learning operations
+from tensorflow.keras.preprocessing.image import ImageDataGenerator   # for data augmentation
+from tensorflow.keras.optimizers import Adam,SGD   # deep learning model optimizers to enhance the performance
+from tensorflow.keras.models import Sequential  # to define a sequential model
+from tensorflow.keras.layers import Dense,Dropout,Flatten,Conv2D,MaxPooling2D,BatchNormalization
+import random
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+# Mount Google drive to access the chest x-ray classification dataset
+from google.colab import drive
+drive.mount('/content/drive')# loading dataset 1
+dataset_1 = '/content/drive/MyDrive/Chest X-ray'
+
+# define a function to load both datasets
+def load_x_ray_images(folder, label):
+    images = []
+    labels = []
+    # Listing all the common image file extensions
+    extensions = ['*.png', '*.jpg', '*.jpeg']
+    for ext in extensions:
+        for filename in glob.glob(os.path.join(folder, ext)):
+            img = Image.open(filename).convert('RGB')  # standardizing all images to the RGB format to ensure consistency in colour channel
+            img = img.resize((64, 64))  # Resize the image for computational reasons
+            img = np.array(img)
+            images.append(img)
+            labels.append(label)
+    return images, labels
+# load the classes in dataset 1
+covid_images_path = os.path.join(dataset_1, 'COVID')
+pneumonia_path = os.path.join(dataset_1, 'PNEUMONIA')
+normal_path = os.path.join(dataset_1, 'NORMAL')
+
+# Load images and labels
+covid_images, covid_labels = load_x_ray_images(covid_images_path, 'covid')
+pneumonia_images, pneumonia_labels = load_x_ray_images(pneumonia_path, 'pneumonia')
+normal_images, normal_labels = load_x_ray_images(normal_path, 'normal')
+
+# Combine chest X-ray datasets
+covid_pneumonia_normal_images = covid_images + pneumonia_images + normal_images
+covid_pneumonia_normal_labels = covid_labels + pneumonia_labels + normal_labels
+# loading dataset 2
+dataset_2 = '/content/drive/MyDrive/Tuberculosis X-ray'
+# load the classes in dataset 2
+tuberculosis_images_path = os.path.join(dataset_2, 'TUBERCULOSIS')
+
+# Load images and labels
+tuberculosis_images, tuberculosis_labels = load_x_ray_images(tuberculosis_images_path, 'tuberculosis')
+# Combine / Concatenating all datasets
+image_dataset = covid_pneumonia_normal_images + tuberculosis_images
+image_labels = covid_pneumonia_normal_labels + tuberculosis_labels
+
+# Convert to numpy arrays
+image_dataset = np.array(image_dataset)
+image_labels = np.array(image_labels)
+
+print('Total images:', image_dataset.shape)
+# Calculate the length of each class
+covid_count = np.sum(image_labels == 'covid')
+pneumonia_count = np.sum(image_labels == 'pneumonia')
+tuberculosis_count = np.sum(image_labels == 'tuberculosis')
+normal_count = np.sum(image_labels == 'normal')
+
+# Print the counts
+print(f'Number of COVID-19 images: {covid_count}')
+print(f'Number of Pneumonia images: {pneumonia_count}')
+print(f'Number of Tuberculosis images: {tuberculosis_count}')
+print(f'Number of Normal images: {normal_count}')total_samples = len(image_labels)  # Total number of images
+
+
+# Calculate the percentages
+covid_percentage = (covid_count / total_samples) * 100
+pneumonia_percentage = (pneumonia_count / total_samples) * 100
+tuberculosis_percentage = (tuberculosis_count / total_samples) * 100
+normal_percentage = (normal_count / total_samples) * 100
+
+# Display the percentages for each class
+print(f'Percentage of COVID-19 images: {covid_percentage:.2f}%')
+print(f'Percentage of Pneumonia images: {pneumonia_percentage:.2f}%')
+print(f'Percentage of Tuberculosis images: {tuberculosis_percentage:.2f}%')
+print(f'Percentage of Normal images: {normal_percentage:.2f}%')
+
+# Count the occurrences of each class label
+unique_labels, label_counts = np.unique(image_labels, return_counts=True)
+
+# Create a column chart
+plt.bar(unique_labels, label_counts, tick_label=['COVID-19', 'Pneumonia', 'Normal', 'Tuberculosis'])
+plt.xlabel('Class')
+plt.ylabel('Number of Images')
+plt.title('Distribution of Classes in Chest X-Rays')
+plt.show()
+# mapping the classes
+image_classes = {
+    'covid': 'COVID',
+    'pneumonia': 'PNEUMONIA',
+    'normal': 'NORMAL',
+    'tuberculosis': 'TUBERCULOSIS'
+}
+
+# function to view images
+def visualize_images(images, labels, image_classes, target_category, samples=6):
+  # viewing 6 random images for each class
+    """
+
+    Parameters:
+
+    images: NumPy array of images
+    labels: NumPy array of class labels
+    image_classes: dictionary mapping class labels to class names
+    target_category: label of the target class to display
+    samples: number of samples to display
+    """
+    # Get the class name from image_classes based on target_category
+    target_class_name = image_classes[target_category.lower()]
+
+    # Find indices of images belonging to the target class
+    target_indices = np.where(labels == target_category.lower())[0]
+
+    # Randomly sample from the indices, ensuring not to exceed available samples
+    sampled_indices = random.sample(list(target_indices), min(samples, len(target_indices)))
+
+    # Create a subplot for each sampled image
+    fig, axes = plt.subplots(1, samples, figsize=(12, 5))
+
+    # Plot each sampled image with its class name
+    for i, index in enumerate(sampled_indices):
+        axes[i].imshow(images[index], cmap='viridis')
+        axes[i].axis('off')
+        axes[i].set_title(target_class_name)
+
+    plt.tight_layout()
+    plt.show()
+# visualize covid-19 x-ray images
+visualize_images(image_dataset, image_labels, image_classes, target_category='covid')
+
+# visualize normal pneumonia images
+visualize_images(image_dataset, image_labels, image_classes, target_category='pneumonia')
+
+# checck the number of images in each class
+
+unique_labels, counts = np.unique(image_labels, return_counts=True)
+
+# Print the number of images in each class
+print("Number of images in each class:")
+for label, count in zip(unique_labels, counts):
+    print(f"{label}: {count}")
+# Applying a target size
+label_encoder = {label: idx for idx, label in enumerate(np.unique(image_labels))}
+encoded_labels = np.array([label_encoder[label] for label in image_labels])
+
+# Define the target sample size for all classes
+target_size = 1500
+
+# Define a function to level the number of images in each class to 1500 by random selection
+def reduce_class(images, labels, target_class, target_size=1500):
+    class_indices = np.where(labels == target_class)[0]
+    selected_indices = random.sample(list(class_indices), target_size)
+    return selected_indices
+
+# Reduce classes with more than 1500 samples to 1500
+reduced_indices = []
+for class_label in ['covid', 'normal', 'pneumonia']:
+    reduced_indices.extend(reduce_class(image_dataset, encoded_labels, label_encoder[class_label]))
+
+# Collect images and labels for reduced classes
+reduced_images = image_dataset[reduced_indices]
+reduced_labels = encoded_labels[reduced_indices]
+
+# Combine reduced classes with original minority class data
+minority_indices = np.where(encoded_labels == label_encoder['tuberculosis'])[0]
+minority_images = image_dataset[minority_indices]
+minority_labels = encoded_labels[minority_indices]
+
+combined_images = np.concatenate((reduced_images, minority_images), axis=0)
+combined_labels = np.concatenate((reduced_labels, minority_labels), axis=0)
+len(combined_images)# Applying SMOTE to balance the minority class
+smote = SMOTE(sampling_strategy={label_encoder['tuberculosis']: target_size})
+
+# reshaping the images since SMOTE requires a 2D array as seen in tabular datasets
+reshaped_data = combined_images.reshape(len(combined_images), -1)  # Reshape images to 2D for SMOTE
+
+# Applying SMOTE to the reshaped_data
+smote_images, smote_labels = smote.fit_resample(reshaped_data, combined_labels)
+
+# Reshaping back to multi-dimensional arrays that CNN understands
+balanced_images = smote_images.reshape(-1, *image_dataset.shape[1:])
+
+# Decode labels back to original form
+inverse_label_encoder = {idx: label for label, idx in label_encoder.items()}
+balanced_labels = np.array([inverse_label_encoder[label] for label in smote_labels])
+
+# check the lenght of balanced images
+len(balanced_images)
+# Print the number of images in each class
+unique_labels, counts = np.unique(balanced_labels, return_counts=True)
+print("Number of images in each class after balancing:")
+for label, count in zip(unique_labels, counts):
+    print(f"{label}: {count}")from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+# Define the data augmentation parameters
+train_datagen = ImageDataGenerator(
+    rotation_range=20,        # Random rotation up to 180 degrees
+    fill_mode='nearest',       # Fill mode for points outside the input boundaries
+    horizontal_flip=True,      # Randomly flip images horizontally
+    vertical_flip=True,        # Randomly flip images vertically
+    shear_range=0.2,           # Shear intensity (shear angle in counter-clockwise direction in radians)
+    zoom_range=0.2,             # Range for random zoom
+    width_shift_range=0.2,
+    height_shift_range=0.2
+)
+
+
+
+
+""" Normalization will be done seperately so as to compare performance
+between the original dataset (without augmentation) and augmented dataset
+
+"""
+# conversion of images to numpy arrays before splitting
+normalized_images = np.array(normalized_images)
+#normalized_images
+# conversion of images to numpy arrays before splitting
+normalized_images = np.array(normalized_images)
+#normalized_images
+
+# convert classes to arrays
+balanced_labels = np.array(balanced_labels)
+# convert classes to arrays
+balanced_labels = np.array(balanced_labels)
+## normalizing the imagesprint(len(X_train))
+print(len(X_test))
+print(len(X_val))
+# Calculate the percentages of each set
+total_images = len(X_train) + len(X_val) + len(X_test)
+train_percentage = (len(X_train) / total_images) * 100
+val_percentage = (len(X_val) / total_images) * 100
+test_percentage = (len(X_test) / total_images) * 100
+print("Percentage of train images: {:.2f}%".format(train_percentage))
+print("Percentage of validation images: {:.2f}%".format(val_percentage))
+
+print("Percentage of test images: {:.2f}%".format(test_percentage))
+# using Labelbinarizer
+from sklearn.preprocessing import LabelBinarizer
+
+le = LabelBinarizer()
+y_train_encoded = le.fit_transform(y_train)
+y_val_encoded= le.transform(y_val)
+y_test_encoded= le.transform(y_test)
+# Conversion of images to Tensorflow dataset
+
+""" compiling the datasets for efficient data processing in CNN
+by creating TensorFlow datasets on the splitted data
+
+"""
+train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train_encoded))
+test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test_encoded))
+val_dataset = tf.data.Dataset.from_tensor_slices((X_val, y_val_encoded))
+train_dataset
+# Apply other data pipeline operations to the train dataset: batching, shuffling, repeating and prefetching,
+
+"""
+Only the training set will undergo all the four processes mentioned above since it is the set that will be used to train the model and undergo the learning process
+
+"""
+# Apply transformations to the training dataset
+
+# set the batch size
+batch_size = 32
+
+train_dataset = (
+    train_dataset
+    .shuffle(buffer_size=len(X_train))  # Shuffle the training data
+    .repeat()  # Repeat the dataset
+    .batch(batch_size)  # Batch the data
+    .prefetch(tf.data.AUTOTUNE)  # Prefetch the data
+)
+
+# Apply transformations to the validation dataset
+val_dataset = (
+    val_dataset
+    .batch(batch_size)  # Batch the data
+    .prefetch(tf.data.AUTOTUNE)  # Prefetch the data
+)
+
+# Apply transformations to the test dataset
+test_dataset = (
+    test_dataset
+    .batch(batch_size)  # Batch the data
+    .prefetch(tf.data.AUTOTUNE)  # Prefetch the data
+)
+
+print(train_dataset)
+print(val_dataset)
+print(test_dataset)
+# confirming the input shapes
+for image_batch, label_batch in train_dataset.take(1):
+    print(f"Shape of input images in train_dataset: {image_batch.shape}")
+for image_batch, label_batch in val_dataset.take(1):
+    print(f"Shape of input images in val_dataset: {image_batch.shape}")
+for image_batch, label_batch in test_dataset.take(1):
+    print(f"Shape of input images in test_dataset: {image_batch.shape}")
+# Check the unique labels and create num_classes
+num_classes = len(unique_labels)
+num_classes
+#print(f"Number of unique classes: {num_classes}")
+class_names = le.classes_
+for label, class_name in enumerate(class_names):
+    print(f"Encoded Label {label} corresponds to Class: {class_name}")
+# importing necessary modules
+from tensorflow.keras import layers, Sequential
+from tensorflow.keras.initializers import glorot_uniform
+from tensorflow.keras.regularizers import l2
+
+# initiating the sequential model used build the neural network layer by layer.
+custom_model = Sequential()
+
+"""feature extraction """
+# first convolutional block
+custom_model.add(layers.Conv2D(filters=32, kernel_size=(3,3), activation="relu",
+                               input_shape=(64, 64, 3), padding = 'same'))
+# using 32 filters,3x3 kernel with ReLU activation function
+#custom_model.add(layers.BatchNormalization(axis=3)) #optional
+custom_model.add(layers.MaxPool2D((2,2))) #preserving important features
+
+# second convolutional block
+custom_model.add(layers.Conv2D(filters=64, kernel_size=(3,3), activation="relu", padding = 'same'))
+#custom_model.add(layers.BatchNormalization(axis=3))
+custom_model.add(layers.MaxPool2D((2,2)))
+
+# third convolutional block # optional
+custom_model.add(layers.Conv2D(filters=128, kernel_size=(3,3), activation="relu", padding='same'))
+#custom_model.add(layers.BatchNormalization(axis=-1))
+custom_model.add(layers.MaxPool2D((2,2)))
+
+"""Flattening"""
+# flatten layer
+custom_model.add(layers.Flatten())
+
+"""Regularization"""
+# dropout layer
+custom_model.add(layers.Dropout(0.25)) # using a dropout rate of 25%.
+
+"""Classification Stage"""
+# Dense layer
+custom_model.add(layers.Dense(64, activation="relu")) # using 64 units and ReLU activation
+
+# another dropout layer
+#custom_model.add(layers.Dropout(0.25)) # using a dropout rate of 25%.
+
+# Output / final dense layer: using the number of classes as units with softmax activation since there are multiple classes.
+custom_model.add(layers.Dense(num_classes, activation='softmax')) # Output layer
+# Check the model summary
+custom_model.summary()
+# Plotting the model architecture
+from tensorflow.keras.utils import plot_model
+
+# Save model diagram to file
+plot_model(custom_model, to_file='custom_cnn.png', show_shapes=True)
+
+
+custom_model.compile(optimizer=Adam(learning_rate=0.001), metrics = ["accuracy"], loss="categorical_crossentropy")
+
+# define early stopping layer
+from tensorflow.keras.callbacks import EarlyStopping
+es = EarlyStopping(monitor = 
+"val_loss" , patience = 3, mode = "min", verbose = 2)y_test_encodednormalized_images = [np.array(img) / 255.0 for img in balanced_images]
+# # fit the first model without EarlyStopping
+batch_size = 32
+epochs =20
+custom_history = custom_model.fit(train_dataset, epochs=epochs, validation_data= val_dataset,
+                                  batch_size=batch_size, steps_per_epoch=len(X_train)//batch_size, verbose =1)
+# Save the model and training history on google drive
+import pickle
+
+# setting path
+model_path = "/content/drive/MyDrive/custom_model.h5"
+history_path = "/content/drive/MyDrive/custom_history.pkl"
+
+# saving the model
+custom_model.save(model_path)
+
+# Save the training history
+with open(history_path, 'wb') as file_pi:
+    pickle.dump(custom_history.history, file_pi)
+
+print(f"Model and history saved to {model_path} and {history_path}")
+# # setting path
+# import pickle
+
+# model_path = "/content/drive/MyDrive/custom_model.h5"
+# history_path = "/content/drive/MyDrive/custom_cnn_history.pkl"
+# Load the model
+from tensorflow.keras.models import load_model
+from tensorflow.keras.callbacks import History
+custom_model = load_model(model_path)
+
+# Load the training history
+with open(history_path, 'rb') as file_pi:
+    custom_history_pkl = pickle.load(file_pi) # history is loaded as a dict and needs to be converted to its standard history format
+print(custom_history_pkl.keys())
+# Converting history back from a dict
+class CustomHistory(History):
+    def __init__(self, history_dict):
+        super().__init__()
+        self.history = history_dict
+custom_history = CustomHistory(custom_history_pkl)
+# visualize accuracy and loss
+
+# Defining a function to visualize the accuracy and loss of all models accross each epoch
+
+def visualize_result(history, cnn_name):
+
+    """
+    History represents the saved performance of a specific model
+    cnn_name is the name of the model
+    """
+    # Create subplots with 1 row and 2 columns
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # training and validation loss
+    ax1.plot(history.history['loss'], marker='o', label='Training Loss') # adding marker at each epoch
+    ax1.plot(history.history['val_loss'], marker='o', label='Validation Loss')
+    ax1.set_title(f"{cnn_name}Loss Over Epochs")
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.legend(loc='upper right')
+
+    # training and validation accuracy
+    ax2.plot(history.history['accuracy'], marker='*', label='Training Accuracy')
+    ax2.plot(history.history['val_accuracy'], marker='*', label='Validation Accuracy')
+    ax2.set_title(f"{cnn_name}Accuracy Over Epochs")
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Accuracy')
+    ax2.legend(loc='lower right')
+
+    # Adjust layout and save the plot
+    plt.tight_layout()
+    plt.savefig(f"{cnn_name}_loss_accuracy_subplot_with_markers.png")
+    plt.show()
+# evaluating the model on the unseen data
+accuracy = custom_model.evaluate(val_dataset, verbose=2)
+import seaborn as sns
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+def plot_confusion_matrix(model, data_set, class_names):
+    # Predict with the model on the dataset
+    y_pred = model.predict(data_set)
+
+    # Extract true labels from the dataset
+    y_true = np.concatenate([label.numpy() for _, label in data_set], axis=0)
+
+    # Convert y_true to 1D array if necessary
+    y_true = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+
+    # Calculate confusion matrix
+    confusion_matrix = tf.math.confusion_matrix(y_true, np.argmax(y_pred, axis=1))
+
+    # Plotting the Confusion Matrix
+    f, ax = plt.subplots(figsize=(10, 8))
+    sns.heatmap(
+        confusion_matrix,
+        annot=True,
+        linewidths=.4,
+        fmt="d",
+        square=True,
+        cmap="Blues",  # Adjust color map for better visualization
+        ax=ax
+    )
+
+    # Customize tick labels
+    tick_marks = np.arange(len(class_names))
+    plt.xticks(tick_marks + 0.5, class_names, rotation=45)
+    plt.yticks(tick_marks + 0.5, class_names, rotation=0)
+
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix')
+    plt.tight_layout()
+
+    plt.show()
+
+# Plot confusion matrix
+plot_confusion_matrix(custom_model, val_dataset, class_names=image_classes.values())
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+# Convert predicted probabilities to binary labels
+y_pred = custom_model.predict(val_dataset)
+y_pred_binary = np.argmax(y_pred, axis=1)
+
+# Extracting true labels from the dataset
+y_true = np.concatenate([label.numpy() for _, label in val_dataset], axis=0)
+
+# Convert y_true to 1D array if necessary
+y_true = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+
+# Evaluate metrics
+accuracy = accuracy_score(y_true, y_pred_binary)
+precision = precision_score(y_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+# initiating the sequential model used build the neural network layer by layer.
+
+aug_cnn_model = Sequential()
+
+"""feature extraction """
+# first convolutional block
+aug_cnn_model.add(layers.Conv2D(filters=32, kernel_size=(3,3), activation="relu",
+                               input_shape=(64, 64, 3), padding = 'same'))
+#aug_cnn_model.add(layers.BatchNormalization(axis=3)) #optional
+aug_cnn_model.add(layers.MaxPool2D((2,2))) #preserving important features
+
+# second convolutional block
+aug_cnn_model.add(layers.Conv2D(filters=64, kernel_size=(3,3), activation="relu", padding = 'same'))
+#aug_cnn_model.add(layers.BatchNormalization(axis=3))
+aug_cnn_model.add(layers.MaxPool2D((2,2)))
+
+# third convolutional block # optional
+aug_cnn_model.add(layers.Conv2D(filters=128, kernel_size=(3,3), activation="relu", padding='same'))
+#aug_cnn_model.add(layers.BatchNormalization(axis=-1))
+aug_cnn_model.add(layers.MaxPool2D((2,2)))
+
+"""flatten, dropout and dense layer """
+aug_cnn_model.add(layers.Flatten())# flatten layer
+aug_cnn_model.add(layers.Dropout(0.25))
+aug_cnn_model.add(layers.Dense(64, activation="relu")) # adding Dense layer
+aug_cnn_model.add(layers.Dense(num_classes, activation='softmax'))# final layer
+
+# compiling
+aug_cnn_model.compile(optimizer=Adam(learning_rate=0.001), metrics = ["accuracy"], loss="categorical_crossentropy")
+
+# explore the summary
+aug_cnn_model.summary()
+# fit the first model by experimenting early stopping to reduce loading time
+
+aug_cnn_history = aug_cnn_model.fit(
+    train_datagen.flow(X_train, y_train_encoded, batch_size=batch_size, seed=0, shuffle=False),
+    epochs=epochs,callbacks=[es], steps_per_epoch=len(X_train) // batch_size, validation_data=(X_val, y_val_encoded),
+    verbose=1
+)
+
+# Saving the model and training history on google drive
+# setting path
+model_path = "/content/drive/MyDrive/aug_cnn_model.keras"
+history_path = "/content/drive/MyDrive/aug_cnn_history.pkl"
+
+# saving the model
+aug_cnn_model.save(model_path)
+
+# Save the training history
+with open(history_path, 'wb') as file_pi:
+    pickle.dump(aug_cnn_history.history, file_pi)
+# loading them if necessary
+aug_cnn_model = load_model(model_path)
+
+# Load the training history
+with open(history_path, 'rb') as file_pi:
+    aug_cnn_history_pkl = pickle.load(file_pi)
+
+# Converting history back from a dict
+class CustomHistory(History):
+    def __init__(self, history_dict):
+        super().__init__()
+        self.history = history_dict
+aug_cnn_history = CustomHistory(aug_cnn_history_pkl)
+# visualize performance across epochs
+
+visualize_result(aug_cnn_history, cnn_name="Augmented Custom CNN")
+# evaluating the model on the unseen data
+accuracy = aug_cnn_model.evaluate(val_dataset, verbose=2)
+# Plot confusion matrix
+plot_confusion_matrix(aug_cnn_model, val_dataset, class_names=image_classes.values())
+from keras.applications.vgg16 import VGG16
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Flatten, Dense, Dropout, Lambda
+from tensorflow.keras.optimizers import Adam
+
+""" Feature Extraction"""
+# Intializing the model
+# The 'include_top=False' parameter excludes the fully connected layers (top layers), retaining only the convolutional layers
+
+vgg16_model = VGG16(weights='imagenet', include_top=False, input_shape=(64, 64, 3))
+
+# Freezing the layers to preserve the weights from the pre-trained convolutional layers
+for layer in vgg16_model.layers:
+    layer.trainable = False
+
+# Model Architecture
+""" Adding the pre-trained model to a Sequential model """
+model_vgg16 = Sequential()
+
+# Adding a Lambda layer to ensure compatibility with the input shape
+model_vgg16.add(Lambda(lambda x: x, input_shape=(64, 64, 3)))
+
+# Adding the pre-trained VGG16 model
+model_vgg16.add(vgg16_model)
+
+# Flatten the output from VGG16
+model_vgg16.add(Flatten())
+
+""" Adding custom layers """
+model_vgg16.add(Dense(64, activation='relu'))
+model_vgg16.add(Dropout(0.2))
+model_vgg16.add(Dense(32, activation='relu'))
+model_vgg16.add(Dense(num_classes, activation='softmax'))
+
+# Compile model
+opt = Adam()
+model_vgg16.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Summary
+model_vgg16.summary()
+# Fit the model using the original data
+
+batch_size = 32
+epochs =20
+vgg16_history = model_vgg16.fit(train_dataset, epochs=epochs, validation_data= val_dataset,
+                                  batch_size=batch_size, steps_per_epoch=len(X_train)//batch_size, verbose =1)
+# visualize performance across epochs
+
+visualize_result(vgg16_history, cnn_name="VGG16 ")
+# evaluating the model on the unseen data
+accuracy = model_vgg16.evaluate(val_dataset, verbose=2)
+# Plot confusion matrix
+plot_confusion_matrix(model_vgg16, val_dataset, class_names=image_classes.values())
+
+# Convert predicted probabilities to binary labels
+y_pred = model_vgg16.predict(val_dataset)
+y_pred_binary = np.argmax(y_pred, axis=1)
+
+# Extracting true labels from the dataset
+y_true = np.concatenate([label.numpy() for _, label in val_dataset], axis=0)
+
+# Convert y_true to 1D array if necessary
+y_true = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+
+# Evaluate metrics
+accuracy = accuracy_score(y_true, y_pred_binary)
+precision = precision_score(y_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+from tensorflow.keras.applications import ResNet101
+
+""" Feature Extraction"""
+# Intializing the model
+# The 'include_top=False' parameter excludes the fully connected layers (top layers), retaining only the convolutional layers
+resnet_101_model = ResNet101(weights='imagenet', include_top=False, input_shape=(64, 64, 3))
+
+#Freezing the layers to preserve the weights from the pre-trained convolutional layers
+for layer in resnet_101_model.layers:
+    layer.trainable = False
+
+# Model Architecture
+""" Adding the pre-trained model"""
+model_resnet_101 = Sequential()
+
+# Adding a Lambda layer to ensure compatibility with the input shape
+model_resnet_101.add(Lambda(lambda x: x, input_shape=(64, 64, 3)))
+
+model_resnet_101.add(resnet_101_model)
+model_resnet_101.add(Flatten())
+
+""" Adding the custom layers"""
+model_resnet_101.add(Dense(64, activation='relu'))
+model_resnet_101.add(Dropout(0.2))
+model_resnet_101.add(Dense(32, activation='relu'))
+model_resnet_101.add(Dense(num_classes, activation='softmax'))
+opt=Adam()
+# Compile model
+model_resnet_101.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+
+# summary
+model_resnet_101.summary()
+# Fit the model using the original data
+
+batch_size = 32
+epochs =20
+resnet_101_history = model_resnet_101.fit(train_dataset, epochs=epochs, validation_data= val_dataset,
+                                  batch_size=batch_size, steps_per_epoch=len(X_train)//batch_size, verbose =1)
+# visualize performance across epochs
+
+visualize_result(resnet_101_history, cnn_name="ResNet-101 ")
+# evaluating the model on the unseen data
+accuracy = model_resnet_101.evaluate(val_dataset, verbose=2)
+# Plot confusion matrix
+plot_confusion_matrix(model_resnet_101, val_dataset, class_names=image_classes.values())
+# metrics
+
+# Convert predicted probabilities to binary labels
+y_pred = model_resnet_101.predict(val_dataset)
+y_pred_binary = np.argmax(y_pred, axis=1)
+
+# Extracting true labels from the dataset
+y_true = np.concatenate([label.numpy() for _, label in val_dataset], axis=0)
+
+# Convert y_true to 1D array if necessary
+y_true = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+
+# Evaluate metrics
+accuracy = accuracy_score(y_true, y_pred_binary)
+precision = precision_score(y_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+#!pip install tensorflow==2.15.0
+import tensorflow as tf
+
+print("TensorFlow version:", tf.__version__)
+from tensorflow.keras.applications import DenseNet201
+
+""" Feature Extraction"""
+# Intializing the model
+# The 'include_top=False' parameter excludes the fully connected layers (top layers), retaining only the convolutional layers
+DenseNet_201_model = DenseNet201(weights='imagenet', include_top=False, input_shape=(64, 64, 3))
+
+#Freezing the layers to preserve the weights from the pre-trained convolutional layers
+for layer in DenseNet_201_model.layers:
+    layer.trainable = False
+
+# Model Architecture
+""" Adding the pre-trained model"""
+model_densenet_201 = Sequential()
+model_densenet_201.add(DenseNet_201_model)
+model_densenet_201.add(Flatten())
+
+""" Adding the custom layers"""
+model_densenet_201.add(Dense(64, activation='relu'))
+model_densenet_201.add(Dropout(0.2))
+model_densenet_201.add(Dense(32, activation='relu'))
+model_densenet_201.add(Dense(num_classes, activation='softmax'))
+opt=Adam()
+# Compile model
+model_densenet_201.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+
+# summary
+model_densenet_201.summary()
+# Fit the model using the original data
+
+batch_size = 32
+epochs =20
+densenet_201_history = model_densenet_201.fit(train_dataset, epochs=epochs, validation_data= val_dataset,
+                                  batch_size=batch_size, steps_per_epoch=len(X_train)//batch_size, verbose =1)
+# visualize performance across epochs
+
+visualize_result(densenet_201_history, cnn_name="Densenet 201 ")
+# evaluating the model on the unseen data
+accuracy = model_densenet_201.evaluate(val_dataset, verbose=2)
+# Plot confusion matrix
+plot_confusion_matrix(model_densenet_201, val_dataset, class_names=image_classes.values())
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+# Convert predicted probabilities to binary labels
+y_pred = model_densenet_201.predict(val_dataset)
+y_pred_binary = np.argmax(y_pred, axis=1)
+
+# Extracting true labels from the dataset
+y_true = np.concatenate([label.numpy() for _, label in val_dataset], axis=0)
+
+# Convert y_true to 1D array if necessary
+y_true = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+
+# Evaluate metrics
+accuracy = accuracy_score(y_true, y_pred_binary)
+precision = precision_score(y_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+
+# visualize performance across epochs
+
+visualize_result(vgg16_history, cnn_name="VGG16 ")
+
+
+# evaluating the model on the unseen data
+accuracy = custom_model.evaluate(val_dataset, verbose=2)
+
+# Plot confusion matrix
+plot_confusion_matrix(custom_model, val_dataset, class_names=image_classes.values())
+
+
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+# Convert predicted probabilities to binary labels
+y_pred = custom_model.predict(val_dataset)
+y_pred_binary = np.argmax(y_pred, axis=1)
+
+# Extracting true labels from the dataset
+y_true = np.concatenate([label.numpy() for _, label in val_dataset], axis=0)
+
+# Convert y_true to 1D array if necessary
+y_true = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+
+# Evaluate metrics
+accuracy = accuracy_score(y_true, y_pred_binary)
+precision = precision_score(y_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+
+# installing necessary packages
+!pip install vit-keras
+!pip install tensorflow-addons
+!pip install vit-keras tensorflow-addons
+
+from vit_keras import vit
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Input
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+
+# Load the Vision Transformer model - vit_b32
+vit_model = vit.vit_b16(
+    image_size=224,
+    activation='softmax',
+    pretrained=True,
+    include_top=False,
+    pretrained_top=False
+)
+
+# Freeze the layers to preserve the weights from the pre-trained model
+for layer in vit_model.layers:
+    layer.trainable = False
+
+# Create a Keras model
+model_vit = Sequential()
+model_vit.add(Input(shape=(224, 224, 3)))  # Adjust input shape
+model_vit.add(vit_model)
+model_vit.add(Flatten())
+
+# Adding the custom layers
+model_vit.add(Dense(64, activation='relu'))
+model_vit.add(Dropout(0.2))
+model_vit.add(Dense(32, activation='relu'))
+model_vit.add(Dense(num_classes, activation='softmax'))
+
+# Define the optimizer
+opt = Adam()
+
+# Compile model
+model_vit.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Summary
+model_vit.summary()
+
+# Training the model
+history = model_vit.fit(X_train_upscaled, y_train_encoded,
+                        epochs=10,
+                        batch_size=32,
+                        verbose=1,
+                        validation_split=0.1)
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+
+# Convert predicted probabilities to binary labels
+y_pred = model_vit.predict(X_val_upscaled)
+y_pred_binary = np.argmax(y_pred, axis=1)
+# adding the label
+y_val_true = np.argmax(y_val_encoded, axis=1)
+
+# Evaluate metrics
+accuracy = accuracy_score(y_val_true, y_pred_binary)
+precision = precision_score(y_val_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_val_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_val_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+
+# confusion matrix
+y_pred = model_vit.predict(X_val_upscaled)
+y_pred_classes = np.argmax(y_pred, axis=1)
+y_true = np.argmax(y_val_encoded, axis=1)
+
+# Compute confusion matrix
+conf_matrix = confusion_matrix(y_true, y_pred_classes)
+
+# Plot confusion matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
+            xticklabels=le.classes_, yticklabels=le.classes_)
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.title('Confusion Matrix')
+plt.show()
+# Load the Vision Transformer model (ViT-Base)
+vit_model_b32 = vit.vit_b32(
+    image_size=224,
+    activation='softmax',
+    pretrained=True,
+    include_top=False,
+    pretrained_top=False
+)
+
+# Freeze the layers to preserve the weights from the pre-trained model
+for layer in vit_model_b32.layers:
+    layer.trainable = False
+
+
+# Create a Keras model
+model_b32_vit = Sequential()
+model_b32_vit.add(Input(shape=(224, 224, 3)))  # Adjust input shape
+model_b32_vit.add(vit_model_b32)
+model_b32_vit.add(Flatten())
+
+# Adding the custom layers
+model_b32_vit.add(Dense(64, activation='relu'))
+model_b32_vit.add(Dropout(0.2))
+model_b32_vit.add(Dense(32, activation='relu'))
+model_b32_vit.add(Dense(num_classes, activation='softmax'))
+
+# Define the optimizer
+opt = Adam()
+
+# Compile model
+model_b32_vit.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Summary
+model_b32_vit.summary()
+
+# Training the visual transformer model
+history_b32 = model_b32_vit.fit(X_train_upscaled, y_train_encoded,
+                        epochs=10,
+                        batch_size=32,
+                        verbose=1,
+                        validation_split=0.1)
+# confusion matrix
+y_pred = model_b32_vit.predict(X_val_upscaled)
+y_pred_classes = np.argmax(y_pred, axis=1)
+y_true = np.argmax(y_val_encoded, axis=1)
+
+# Compute confusion matrix
+conf_matrix = confusion_matrix(y_true, y_pred_classes)
+
+# Plot confusion matrix
+plt.figure(figsize=(10, 8))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues',
+            xticklabels=le.classes_, yticklabels=le.classes_)
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.title('Confusion Matrix')
+plt.show()
+# Evaluation metrics
+# Convert predicted probabilities to binary labels
+y_pred_binary = np.argmax(y_pred, axis=1)
+# adding the label
+y_val_true = np.argmax(y_val_encoded, axis=1)
+
+# Evaluate metrics
+accuracy = accuracy_score(y_val_true, y_pred_binary)
+precision = precision_score(y_val_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_val_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_val_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+
+# Install Kerastuner
+!pip install keras-tuner
+
+from keras_tuner.tuners import RandomSearch, Hyperband
+from sklearn.model_selection import ParameterGrid
+from tensorflow.keras.initializers import glorot_uniform
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.optimizers import Adam
+# selecting the preferred hyperparameters to be tuned
+#
+"""
+The keys in the dictionary represent all the hyperparameters that will be investigated. Hence, RandomSearch will
+produced best combinations
+"""
+
+param_grid = {
+    'hidden_units': [64, 128, 256],
+    'regularizer': [0.01, 0.001, 0.0],  # Options for the regularization strength in a layer
+    'activation_function': ['relu', 'tanh'],
+    'dropout_rate': [0.25, 0.5],
+    'hidden_units_2': [64, 128, 256],
+    'regularizer_2': [0.01, 0.001, 0.0],  # Options for the regularization strength in the second layer
+    'learning_rate': [0.001, 0.0001]  # Options for the learning rate in the optimizer
+}
+# from tensorflow.keras import layers, Sequential
+# from tensorflow.keras.initializers import glorot_uniform
+# from tensorflow.keras.regularizers import l2
+# custom_model = Sequential()
+# custom_model.add(layers.Conv2D(filters=32, kernel_size=(3, 3), activation="relu",
+#                                input_shape=(64, 64, 3), padding='same'))
+# custom_model.add(layers.MaxPool2D((2, 2)))
+# custom_model.add(layers.Conv2D(filters=64, kernel_size=(3, 3), activation="relu", padding='same'))
+# custom_model.add(layers.MaxPool2D((2, 2)))
+# custom_model.add(layers.Flatten())# flatten layer
+# custom_model.add(layers.Dense(64, activation="relu"))
+# custom_model.add(layers.Dropout(0.25)) # adding dropout
+# custom_model.add(layers.Dense(num_classes, activation='softmax'))
+# custom_model.compile(optimizer=Adam(learning_rate=0.001), metrics=["accuracy"], loss="categorical_crossentropy")
+# Define model_hyperparameter function for hyperparameter tuning
+def model_hyperparameter(optimize):
+    model_optimize = Sequential()
+    model_optimize.add(custom_model) # Adding the base CNN model to leverage pre-trained features
+
+    # Hidden units and regularizers; incorporating the param_grid
+    hyper_units = optimize.Choice("hidden_units", values=param_grid['hidden_units'])
+    hyper_regularizer = optimize.Choice("regularizer", values=param_grid['regularizer'])
+
+    regularizer = None
+    if hyper_regularizer > 0:
+        regularizer = l2(hyper_regularizer)
+
+    # Adding dense layer
+    model_optimize.add(Dense(units=hyper_units,
+                             activation=optimize.Choice('activation_function', values=param_grid['activation_function']),
+                             kernel_regularizer=regularizer))
+
+    # Adding dropout layer
+    model_optimize.add(Dropout(rate=optimize.Choice("dropout_rate", values=param_grid['dropout_rate'])))
+
+    # Adding a second dense layer
+    hyper_units_2 = optimize.Choice("hidden_units2", values=param_grid['hidden_units_2'])
+    hyper_regularizer_2 = optimize.Choice("regularizer2", values=param_grid['regularizer_2'])
+
+    regularizer2 = None
+    if hyper_regularizer_2 > 0:
+        regularizer2 = l2(hyper_regularizer_2)
+
+    model_optimize.add(Dense(units=hyper_units_2,
+                             activation=optimize.Choice('activation_function', values=param_grid['activation_function']),
+                             kernel_regularizer=regularizer2))
+
+    # Adding output layer
+    model_optimize.add(Dense(num_classes, activation="softmax"))
+
+    # Learning rate
+    optimized_learning_rate = optimize.Choice("learning_rate", values=param_grid['learning_rate'])
+
+    # Compile the model
+    model_optimize.compile(optimizer=Adam(learning_rate=optimized_learning_rate),
+                           loss="categorical_crossentropy", metrics=["accuracy"])
+
+    return model_optimize
+# Create RandomSearch tuner
+tuner_random = RandomSearch(model_hyperparameter, max_trials=3,
+                      objective="val_accuracy", directory="/content/drive/MyDrive/",
+                    project_name="model_optimization_randomsearch")
+# Create Hyperband tuner (an alternative)
+tuner_hyper = Hyperband( model_hyperparameter,
+                     objective = "val_accuracy",
+                     max_epochs= 5,
+                     directory="/content/drive/MyDrive/",
+                     project_name = "model_optimization_hyperband")
+tuner_random.search(X_train, y_train_encoded, epochs=5,
+                   validation_data=(X_val, y_val_encoded), verbose=2)
+# Get the best hyperparameters
+best_hyperparameters = tuner_random.get_best_hyperparameters()[0]
+
+print("The Best Hyperparameters:")
+print("---------------------")
+for param, value in best_hyperparameters.values.items():
+    print(f"{param}: {value}")
+# Building with the best hyperparameters
+model_hp = tuner_random.hypermodel.build(best_hyperparameters) # creating the model with the best hyperparameters
+# Fit the model using early stopping
+history_hp = model_hp.fit(train_dataset, epochs=20,
+                          steps_per_epoch=len(X_train),
+                                    validation_data=(val_dataset),
+                                batch_size=64, callbacks =[es], verbose=1)
+# check tensorflow version to ensure compatibility during deployment
+import tensorflow as tf
+print(tf.__version__)
+# Saving the optimized mode
+import pickle
+
+# setting path
+model_path = "/content/drive/MyDrive/Chest_Xray_Model_Tf_2_15.h5"
+history_path = "/content/drive/MyDrive/history_hp.pkl"
+
+# saving the model
+model_hp.save(model_path)
+
+# Save the training history
+with open(history_path, 'wb') as file_pi:
+    pickle.dump(history_hp.history, file_pi)
+# my_model = "/content/drive/MyDrive/Chest_Xray_Model_Tf_2_15.h5"
+# from tensorflow.keras.models import load_model
+
+# model_hp = load_model(my_model)
+# visualize performance across epochs
+
+visualize_result(history_hp, cnn_name="Optimized Model ")
+# evaluating the optimized model on the unseen data
+accuracy = model_hp.evaluate(val_dataset, verbose=2)
+# Plot confusion matrix
+plot_confusion_matrix(model_hp, val_dataset, class_names=image_classes.values())
+# classification metrics
+
+# Convert predicted probabilities to binary labels
+y_pred = model_hp.predict(val_dataset)
+y_pred_binary = np.argmax(y_pred, axis=1)
+
+# Extracting true labels from the dataset
+y_true = np.concatenate([label.numpy() for _, label in val_dataset], axis=0)
+
+# Convert y_true to 1D array if necessary
+y_true = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+
+# Evaluate metrics
+accuracy = accuracy_score(y_true, y_pred_binary)
+precision = precision_score(y_true, y_pred_binary, average='weighted', zero_division=1)
+recall = recall_score(y_true, y_pred_binary, average='weighted')
+f1 = f1_score(y_true, y_pred_binary, average='weighted')
+
+print("Evaluation Metrics:")
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+
+#!pip install mglearn
+import mglearn
+mglearn.plots.plot_cross_validation()
+# # using same achitecture
+# from tensorflow.keras import layers, Sequential
+# from tensorflow.keras.initializers import glorot_uniform
+# from tensorflow.keras.regularizers import l2
+# custom_model = Sequential()
+# custom_model.add(layers.Conv2D(filters=32, kernel_size=(3, 3), activation="relu",
+#                                input_shape=(64, 64, 3), padding='same'))
+# custom_model.add(layers.MaxPool2D((2, 2)))
+# custom_model.add(layers.Conv2D(filters=64, kernel_size=(3, 3), activation="relu", padding='same'))
+# custom_model.add(layers.MaxPool2D((2, 2)))
+# custom_model.add(layers.Flatten())# flatten layer
+# custom_model.add(layers.Dense(64, activation="relu"))
+# custom_model.add(layers.Dropout(0.25)) # adding dropout
+# custom_model.add(layers.Dense(num_classes, activation='softmax'))
+# custom_model.compile(optimizer=Adam(learning_rate=0.001), metrics=["accuracy"], loss="categorical_crossentropy")
+from sklearn.model_selection import KFold # using the standard Kfold
+
+k = 5
+kf = KFold(n_splits=k, shuffle=True, random_state=42)
+cv_scores = []
+for train_index, val_index in kf.split(X_train):
+    X_train_kf, X_val_kf = X_train[train_index], X_train[val_index]
+    y_train_kf, y_val_kf = y_train_encoded[train_index], y_train_encoded[val_index]
+
+    # Fit the model without Early Stopping
+    history = custom_model.fit(X_train_kf, y_train_kf, epochs=20,
+                               validation_data=(X_val_kf, y_val_kf),
+                               batch_size=64, verbose=1)
+
+    # Evaluate the model
+    _, accuracy = custom_model.evaluate(X_val_kf, y_val_kf, verbose=0)
+    cv_scores.append(accuracy)
+
+    print(f'Fold accuracy: {accuracy}')
+
+# Calculate and print average accuracy across folds
+print(f'Average accuracy across {k} folds: {np.mean(cv_scores)}')
+
+# Evaluate final model on test set
+test_loss, test_accuracy = custom_model.evaluate(X_test, y_test_encoded, verbose=0)
+print(f'Test accuracy: {test_accuracy}')
+import matplotlib.pyplot as plt
+import numpy as np
+
+def testing_images(index, model):
+    plt.figure(figsize=(4, 6))  # Set figure size
+
+    # Plot original image
+    plt.imshow(X_test[index])
+    plt.title(f'Original X-ray {index}: {le.inverse_transform(y_test_encoded)[index]} | Predicted X-ray {index}: {le.inverse_transform(model.predict(X_test[index].reshape(1, 64, 64, 3)))[0]}')
+    plt.axis('off')
+    plt.show()
+
+# using inverse_transform() to get the output label from the output vector
+# testing image 15 with the custom CNN model
+
+visualize_prediction(15, custom_model)
+
+# testing image 200 with the custom CNN model
+
+visualize_prediction(200, custom_model)
+
+# testing image 12 with the optimized model
+
+visualize_prediction(12, model_hp)
+
+# testing image 111 with the optimized model
+
+visualize_prediction(111, model_hp)
+
+# testing image 77 with the custom CNN model
+
+visualize_prediction(200, custom_model)
+
+# testing image 77 with the optimzed model
+visualize_prediction(77, model_hp)
+
